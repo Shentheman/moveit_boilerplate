@@ -242,9 +242,9 @@ bool ExecutionInterface::executeTrajectory(moveit_msgs::RobotTrajectory &traject
   trajectory_msgs::JointTrajectory &trajectory = trajectory_msg.joint_trajectory;
 
   // Debug
-  ROS_INFO_STREAM_NAMED("execution_interface.summary", "Executing trajectory with " << trajectory.points.size()
+  ROS_DEBUG_STREAM_NAMED("execution_interface.summary", "Executing trajectory with " << trajectory.points.size()
                                                                                      << " waypoints");
-  ROS_INFO_STREAM_NAMED("execution_interface.trajectory", "Publishing:\n" << trajectory_msg);
+  ROS_DEBUG_STREAM_NAMED("execution_interface.trajectory", "Publishing:\n" << trajectory_msg);
 
   // Error check
   if (trajectory.points.empty())

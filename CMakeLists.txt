@@ -14,7 +14,11 @@ find_package(catkin REQUIRED COMPONENTS
   tf_conversions
 )
 
-find_package(Eigen3 REQUIRED)
+#find_package(Eigen3 REQUIRED)
+
+# required to find 'Eigen' in indigo
+find_package(cmake_modules REQUIRED)
+find_package(Eigen REQUIRED)
 find_package(Boost REQUIRED)
 
 catkin_package(
@@ -45,7 +49,8 @@ include_directories(
 
 include_directories(SYSTEM
   ${Boost_INCLUDE_DIR}
-  ${EIGEN3_INCLUDE_DIRS}
+  #${EIGEN3_INCLUDE_DIRS}
+  ${EIGEN_INCLUDE_DIRS}
 )
 
 # Fix_state_bounds library

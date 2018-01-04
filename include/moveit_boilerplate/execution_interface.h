@@ -79,6 +79,17 @@ public:
    */
   ExecutionInterface(psm::PlanningSceneMonitorPtr planning_scene_monitor, mvt::MoveItVisualToolsPtr visual_tools);
 
+  ExecutionInterface(
+    psm::PlanningSceneMonitorPtr planning_scene_monitor,
+    mvt::MoveItVisualToolsPtr visual_tools,
+    std::string command_mode, std::string joint_trajectory_topic,
+    std::string cartesian_command_topic, std::string save_traj_to_file_path,
+    bool save_traj_to_file, bool visualize_trajectory_line,
+    bool visualize_trajectory_path, bool check_for_waypoint_jumps);
+
+
+
+
   /**
    * \brief Execute a desired cartesian end effector pose
    * \param pose

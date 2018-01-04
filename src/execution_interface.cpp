@@ -62,9 +62,57 @@
 
 namespace moveit_boilerplate
 {
+
 ExecutionInterface::ExecutionInterface(DebugInterfacePtr debug_interface,
                                        psm::PlanningSceneMonitorPtr planning_scene_monitor)
   : nh_("~"), debug_interface_(debug_interface), planning_scene_monitor_(planning_scene_monitor)
+{
+  // https://github.com/davetcoleman/moveit_boilerplate/blob/indigo-devel/config/config_example.yaml
+  std::string command_mode = "joint_publisher";
+  std::string joint_trajectory_topic = "/ROBOT/position_trajectory_controller/command";
+  std::string cartesian_command_topic = "/execution_interface/cartesian_command";
+  std::string save_traj_to_file_path = "~/ROBOT_trajectory_data/";
+  bool save_traj_to_file = false;
+  bool visualize_trajectory_line = false;
+  bool visualize_trajectory_path = false;
+  bool check_for_waypoint_jumps = false;
+
+  // Load rosparams
+  ros::NodeHandle rpnh(nh_, name_);
+  std::size_t error = 0;
+  error += !rosparam_shortcuts::get(name_, rpnh, "command_mode", command_mode);
+  error += !rosparam_shortcuts::get(name_, rpnh, "joint_trajectory_topic", joint_trajectory_topic);
+  error += !rosparam_shortcuts::get(name_, rpnh, "cartesian_command_topic", cartesian_command_topic);
+  error += !rosparam_shortcuts::get(name_, rpnh, "save_traj_to_file_path", save_traj_to_file_path);
+  error += !rosparam_shortcuts::get(name_, rpnh, "save_traj_to_file", save_traj_to_file);
+  error += !rosparam_shortcuts::get(name_, rpnh, "visualize_trajectory_line", visualize_trajectory_line);
+  error += !rosparam_shortcuts::get(name_, rpnh, "visualize_trajectory_path", visualize_trajectory_path);
+  error += !rosparam_shortcuts::get(name_, rpnh, "check_for_waypoint_jumps", check_for_waypoint_jumps);
+  rosparam_shortcuts::shutdownIfError(name_, error);
+
+  ExecutionInterface(debug_interface_, planning_scene_monitor_,
+    command_mode, joint_trajectory_topic, cartesian_command_topic,
+    save_traj_to_file_path, save_traj_to_file, visualize_trajectory_line,
+    visualize_trajectory_path, check_for_waypoint_jumps);
+  
+  ROS_ERROR("Please don't initiate ExecutionInterface in this way!");
+}
+
+
+ExecutionInterface::ExecutionInterface(DebugInterfacePtr debug_interface,
+  psm::PlanningSceneMonitorPtr planning_scene_monitor,
+  std::string command_mode, std::string joint_trajectory_topic,
+  std::string cartesian_command_topic, std::string save_traj_to_file_path,
+  bool save_traj_to_file, bool visualize_trajectory_line,
+  bool visualize_trajectory_path, bool check_for_waypoint_jumps)
+  : nh_("~")
+  , save_traj_to_file_(save_traj_to_file)
+  , save_traj_to_file_path_(save_traj_to_file_path)
+  , visualize_trajectory_line_(visualize_trajectory_line)
+  , visualize_trajectory_path_(visualize_trajectory_path)
+  , check_for_waypoint_jumps_(check_for_waypoint_jumps)
+  , debug_interface_(debug_interface)
+  , planning_scene_monitor_(planning_scene_monitor)
 {
   // Create initial robot state
   {
@@ -75,23 +123,6 @@ ExecutionInterface::ExecutionInterface(DebugInterfacePtr debug_interface,
   // Debug tools for visualizing in Rviz
   loadVisualTools();
 
-  std::string joint_trajectory_topic;
-  std::string cartesian_command_topic;
-  std::string command_mode;
-
-  // Load rosparams
-  ros::NodeHandle rpnh(nh_, name_);
-  std::size_t error = 0;
-  error += !rosparam_shortcuts::get(name_, rpnh, "command_mode", command_mode);
-  error += !rosparam_shortcuts::get(name_, rpnh, "joint_trajectory_topic", joint_trajectory_topic);
-  error += !rosparam_shortcuts::get(name_, rpnh, "cartesian_command_topic", cartesian_command_topic);
-  error += !rosparam_shortcuts::get(name_, rpnh, "save_traj_to_file_path", save_traj_to_file_path_);
-  error += !rosparam_shortcuts::get(name_, rpnh, "save_traj_to_file", save_traj_to_file_);
-  error += !rosparam_shortcuts::get(name_, rpnh, "visualize_trajectory_line", visualize_trajectory_line_);
-  error += !rosparam_shortcuts::get(name_, rpnh, "visualize_trajectory_path", visualize_trajectory_path_);
-  error += !rosparam_shortcuts::get(name_, rpnh, "check_for_waypoint_jumps", check_for_waypoint_jumps_);
-  rosparam_shortcuts::shutdownIfError(name_, error);
-
   // Choose mode from string
   joint_command_mode_ = stringToJointCommandMode(command_mode);
 
@@ -101,10 +132,79 @@ ExecutionInterface::ExecutionInterface(DebugInterfacePtr debug_interface,
   {
     case JOINT_EXECUTION_MANAGER:
       ROS_DEBUG_STREAM_NAMED(name_, "Connecting to trajectory execution manager");
+      
       if (!trajectory_execution_manager_)
       {
-        trajectory_execution_manager_.reset(
-            new trajectory_execution_manager::TrajectoryExecutionManager(planning_scene_monitor_->getRobotModel()));
+        // trajectory_execution_manager_.reset(new trajectory_execution_manager::TrajectoryExecutionManager(planning_scene_monitor_->getRobotModel()));
+
+        // In our case, ros parameter moveit_controller_manager has a namespace `/move_group`. So we need to remap it to namespace `~` using the following code.
+        // https://github.com/pjsdream/itomp_exec/blob/d99f3b7db7a04fa3267db683a2141caa6cbea85b/itomp_exec/src/planner/itomp_planner_node.cpp#L44
+        // initialize trajectory_execution_manager with robot model
+        // see how it is initialized with ros params at http://docs.ros.org/indigo/api/moveit_ros_planning/html/trajectory__execution__manager_8cpp_source.html#l00074
+        std::string controller;
+        if (nh_.getParam("moveit_controller_manager", controller))
+        {
+            trajectory_execution_manager_.reset(new trajectory_execution_manager::TrajectoryExecutionManager(planning_scene_monitor_->getRobotModel()));
+        }
+        else if (nh_.getParam("/move_group/moveit_controller_manager", controller))
+        {
+            // copy parameters from "/move_group" namespace to "~"
+            bool moveit_manage_controllers = false;
+            bool allowed_execution_duration_scaling = false;
+            bool allowed_goal_duration_margin = false;
+            bool controller_list_declared = false;
+            XmlRpc::XmlRpcValue controller_list;
+            double value;
+            
+            nh_.setParam("moveit_controller_manager", controller);
+            
+            if (nh_.getParam("/move_group/controller_list", controller_list))
+            {
+                controller_list_declared = true;
+                nh_.setParam("controller_list", controller_list);
+            }
+            
+            if (nh_.getParam("/move_group/moveit_manage_controllers", value))
+            {
+                moveit_manage_controllers = true;
+                nh_.setParam("moveit_manage_controllers", value);
+            }
+            
+            if (nh_.getParam("/move_group/allowed_execution_duration_scaling", value))
+            {
+                allowed_execution_duration_scaling = true;
+                nh_.setParam("allowed_execution_duration_scaling", value);
+            }
+            
+            if (nh_.getParam("/move_group/allowed_goal_duration_margin", value))
+            {
+                allowed_goal_duration_margin = true;
+                nh_.setParam("allowed_goal_duration_margin", value);
+            }
+            
+            trajectory_execution_manager_.reset(new trajectory_execution_manager::TrajectoryExecutionManager(planning_scene_monitor_->getRobotModel()));
+            
+            nh_.deleteParam("moveit_controller_manager");
+            
+            if (controller_list_declared)
+                nh_.deleteParam("controller_list");
+            
+            if (moveit_manage_controllers)
+                nh_.deleteParam("moveit_manage_controllers");
+            
+            if (allowed_execution_duration_scaling)
+                nh_.deleteParam("allowed_execution_duration_scaling");
+            
+            if (allowed_goal_duration_margin)
+                nh_.deleteParam("allowed_goal_duration_margin");
+        }
+        else
+        {
+            ROS_WARN("Controller is not defined. MoveItFakeControllerManager is used.");
+            nh_.setParam("moveit_controller_manager", "moveit_fake_controller_manager/MoveItFakeControllerManager");
+            trajectory_execution_manager_.reset(new trajectory_execution_manager::TrajectoryExecutionManager(planning_scene_monitor_->getRobotModel(), true));
+            nh_.deleteParam("moveit_controller_manager");
+        }
       }
       break;
     case JOINT_PUBLISHER:
@@ -142,9 +242,9 @@ bool ExecutionInterface::executeTrajectory(moveit_msgs::RobotTrajectory &traject
   trajectory_msgs::JointTrajectory &trajectory = trajectory_msg.joint_trajectory;
 
   // Debug
-  ROS_DEBUG_STREAM_NAMED("execution_interface.summary", "Executing trajectory with " << trajectory.points.size()
+  ROS_INFO_STREAM_NAMED("execution_interface.summary", "Executing trajectory with " << trajectory.points.size()
                                                                                      << " waypoints");
-  ROS_DEBUG_STREAM_NAMED("execution_interface.trajectory", "Publishing:\n" << trajectory_msg);
+  ROS_INFO_STREAM_NAMED("execution_interface.trajectory", "Publishing:\n" << trajectory_msg);
 
   // Error check
   if (trajectory.points.empty())

@@ -61,7 +61,9 @@ public:
    * \brief Constructor
    */
   explicit DebugInterface(ros::NodeHandle nh);
-
+  explicit DebugInterface(ros::NodeHandle nh,
+    bool autonomous, bool full_autonomous);
+  
   /**
    * \brief Step to next step
    * \return true on success

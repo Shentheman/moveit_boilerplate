@@ -58,11 +58,27 @@ DebugInterface::DebugInterface(ros::NodeHandle nh)
   , next_step_ready_(false)
   , stop_(false)
 {
+  bool autonomous = false;
+  bool full_autonomous = false;
   // Load rosparams
   ros::NodeHandle rpnh(nh_, name_);
   std::size_t error = 0;
-  error += !rosparam_shortcuts::get(name_, rpnh, "autonomous", autonomous_);
-  error += !rosparam_shortcuts::get(name_, rpnh, "full_autonomous", full_autonomous_);
+  error += !rosparam_shortcuts::get(name_, rpnh, "autonomous", autonomous);
+  error += !rosparam_shortcuts::get(name_, rpnh, "full_autonomous", full_autonomous);
+  DebugInterface(nh_, autonomous, full_autonomous);
+  ROS_ERROR("Please don't initiate ExecutionInterface in this way!");
+}
+
+DebugInterface::DebugInterface(ros::NodeHandle nh,
+  bool autonomous, bool full_autonomous)
+  : nh_(nh)
+  , name_("debug_interface")
+  , is_waiting_(false)
+  , next_step_ready_(false)
+  , autonomous_(autonomous)
+  , full_autonomous_(full_autonomous)
+  , stop_(false)
+{
 
   // Warnings
   if (autonomous_)

@@ -338,12 +338,12 @@ bool ExecutionInterface::executeTrajectory(const robot_trajectory::RobotTrajecto
       }
       break;
     case JOINT_PUBLISHER:
-      ROS_INFO_STREAM_NAMED(name_, "Joint publisher");
+      // ROS_INFO_STREAM_NAMED(name_, "Joint publisher");
       joint_trajectory_pub_.publish(trajectory);
 
       if (wait_for_execution)
       {
-        ROS_INFO_STREAM_NAMED(name_, "Sleeping while trajectory executes");
+        // ROS_INFO_STREAM_NAMED(name_, "Sleeping while trajectory executes");
         ros::Duration(trajectory.points.back().time_from_start).sleep();
       }
       break;

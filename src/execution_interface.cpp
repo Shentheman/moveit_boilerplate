@@ -314,7 +314,8 @@ bool ExecutionInterface::executeTrajectory(const robot_trajectory::RobotTrajecto
   switch (joint_command_mode_)
   {
     case JOINT_EXECUTION_MANAGER:
-      ROS_INFO_STREAM_NAMED(name_, "Joint execution manager");
+      // Shen commented it out
+      // ROS_INFO_STREAM_NAMED(name_, "Joint execution manager");
 
       // Reset trajectory manager
       trajectory_execution_manager_->clear();

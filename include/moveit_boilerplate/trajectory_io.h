@@ -171,6 +171,11 @@ private:
 
   // JOINT TRAJECTORY ------------------------------------------------------------------
 
+  // Shen changed this so we can pass in trajectories from outside
+  // not from files or streams.
+  // Since getJointTrajectory() only returns copy of shared_ptr,
+  // we cannot change joint_trajectory_ from outside.
+public:
   // Joint trajectory to load/save to/from file
   robot_trajectory::RobotTrajectoryPtr joint_trajectory_;
 
